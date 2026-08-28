@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a84ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Expenses">
+<link rel="manifest" href="manifest.json">
+<title>Expense Tracker</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#111;background:#f2f2f7}
+*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}
+.app{max-width:700px;margin:auto;padding:env(safe-area-inset-top) 16px calc(90px + env(safe-area-inset-bottom))}
+header{padding:20px 4px 12px;display:flex;justify-content:space-between;align-items:center}
+h1{font-size:34px;margin:0;font-weight:750}.muted{color:#6e6e73}.month{display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px}.month button{border:0;background:white;border-radius:12px;width:40px;height:40px}
+.card{background:white;border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px #0000000d}
+.total-label{color:#6e6e73}.total{font-size:34px;font-weight:750;margin-top:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#f2f2f7;border-radius:16px;padding:14px}.stat b{display:block;font-size:20px;margin-top:4px}
+h2{font-size:20px;margin:2px 0 14px}.row{display:flex;align-items:center;gap:12px;padding:10px 0}.icon{width:40px;height:40px;border-radius:50%;background:#e8f2ff;display:grid;place-items:center;font-size:20px}.grow{flex:1}.amount{font-weight:700}.sub{font-size:13px;color:#6e6e73;margin-top:2px}
+.bar{height:9px;background:#e5e5ea;border-radius:99px;overflow:hidden;margin-top:7px}.bar>i{display:block;height:100%;background:#0a84ff;border-radius:99px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fffffff2;backdrop-filter:blur(18px);border-top:1px solid #ddd;display:flex;justify-content:center;padding:10px 10px calc(10px + env(safe-area-inset-bottom));z-index:5}
+nav button{flex:1;max-width:180px;border:0;background:none;color:#6e6e73;font-weight:600;padding:7px}nav button.active{color:#0a84ff}
+.sheet{position:fixed;inset:0;background:#0006;display:none;align-items:flex-end;z-index:10}.sheet.open{display:flex}
+.modal{background:#f7f7f9;width:100%;max-height:92vh;border-radius:26px 26px 0 0;padding:20px 18px calc(25px + env(safe-area-inset-bottom));overflow:auto}
+label{display:block;font-size:13px;color:#6e6e73;margin:12px 0 5px}
+input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;border-radius:12px;padding:12px}
+.primary{width:100%;border:0;border-radius:14px;padding:14px;background:#0a84ff;color:white;font-weight:700;margin-top:18px}
+.danger{color:#ff3b30;border:0;background:none;padding:8px}.empty{text-align:center;padding:35px;color:#6e6e73}
+.search{margin-bottom:10px}.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div><h1>Expenses</h1><div class="muted">Personal expense tracker</div></div><button onclick="openAdd()" style="border:0;background:#0a84ff;color:white;border-radius:50%;width:44px;height:44px;font-size:27px">+</button></header>
+
+<section id="dashboard">
+<div class="month"><button onclick="changeMonth(-1)">‹</button><b id="monthLabel"></b><button onclick="changeMonth(1)">›</button></div>
+<div class="card"><div class="total-label">Total spending</div><div class="total" id="total">€0.00</div><div class="grid" style="margin-top:14px"><div class="stat"><span class="muted">Transactions</span><b id="count">0</b></div><div class="stat"><span class="muted">Daily average</span><b id="avg">€0.00</b></div></div></div>
+<div class="card"><h2>By category</h2><div id="categories"></div></div>
+<div class="card"><h2>Recent</h2><div id="recent"></div></div>
+</section>
+
+<section id="all" class="hidden">
+<div class="card"><input class="search" id="search" placeholder="Search expenses…" oninput="renderAll()"><div id="allList"></div></div>
+</section>
+</div>
+
+<nav><button id="tabDash" class="active" onclick="showTab('dashboard')">⌂<br>Overview</button><button id="tabAll" onclick="showTab('all')">☷<br>Expenses</button><button onclick="openAdd()">＋<br>Add</button></nav>
+
+<div class="sheet" id="sheet"><div class="modal">
+<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Add Expense</h2><button class="danger" onclick="closeAdd()">Cancel</button></div>
+<label>Date</label><input type="date" id="date">
+<label>Amount (€)</label><input type="number" step="0.01" inputmode="decimal" id="amount" placeholder="0.00">
+<label>Category</label><select id="category"></select>
+<label>Subcategory</label><input id="subcategory" placeholder="Optional">
+<label>Payment method</label><select id="payment"></select>
+<label>Note</label><textarea id="note" rows="3" placeholder="Optional"></textarea>
+<button class="primary" onclick="saveExpense()">Save Expense</button>
+</div></div>
+
+<script>
+const categories=["Housing","Groceries","Eating Out","Transport","Shopping","Utilities","Insurance","Health","Subscriptions","Entertainment","Travel","Family","Education","Personal","Other"];
+const payments=["Debit Card","Credit Card","Bank Transfer","Cash","PayPal","Other"];
+const icons={Housing:"🏠",Groceries:"🛒","Eating Out":"🍽️",Transport:"🚗",Shopping:"🛍️",Utilities:"⚡",Insurance:"🛡️",Health:"❤️",Subscriptions:"🔁",Entertainment:"📺",Travel:"✈️",Family:"👨‍👩‍👧",Education:"📚",Personal:"👤",Other:"•"};
+let expenses=JSON.parse(localStorage.getItem("expenses")||"[]");
+let month=new Date(); month.setDate(1);
+
+const euro=n=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
+const key=d=>new Date(d).toISOString().slice(0,10);
+function save(){localStorage.setItem("expenses",JSON.stringify(expenses))}
+function monthItems(){return expenses.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
+function render(){
+ document.getElementById("monthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+ let items=monthItems(), total=items.reduce((s,e)=>s+e.amount,0);
+ document.getElementById("total").textContent=euro(total);document.getElementById("count").textContent=items.length;
+ document.getElementById("avg").textContent=euro(total/(new Date(month.getFullYear(),month.getMonth()+1,0).getDate()));
+ let map={};items.forEach(e=>map[e.category]=(map[e.category]||0)+e.amount);
+ let cats=Object.entries(map).sort((a,b)=>b[1]-a[1]), max=cats[0]?.[1]||1;
+ document.getElementById("categories").innerHTML=cats.length?cats.map(([c,v])=>`<div class="row"><div class="icon">${icons[c]||"•"}</div><div class="grow"><b>${c}</b><div class="bar"><i style="width:${v/max*100}%"></i></div></div><div class="amount">${euro(v)}</div></div>`).join(""):'<div class="empty">No expenses this month.</div>';
+ let recent=[...items].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+ document.getElementById("recent").innerHTML=recent.length?recent.map(row).join(""):'<div class="empty">Add your first expense.</div>';
+}
+function row(e){return `<div class="row"><div class="icon">${icons[e.category]||"•"}</div><div class="grow"><b>${e.category}</b><div class="sub">${new Date(e.date).toLocaleDateString("de-DE")}${e.subcategory?" • "+esc(e.subcategory):""}${e.note?" • "+esc(e.note):""}</div></div><div class="amount">${euro(e.amount)}</div></div>`}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function renderAll(){let q=document.getElementById("search").value.toLowerCase(), list=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).filter(e=>JSON.stringify(e).toLowerCase().includes(q));document.getElementById("allList").innerHTML=list.length?list.map(e=>row(e)+`<div style="text-align:right"><button class="danger" onclick="removeExpense('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No matching expenses.</div>'}
+function changeMonth(n){month.setMonth(month.getMonth()+n);render()}
+function showTab(t){document.getElementById("dashboard").classList.toggle("hidden",t!=="dashboard");document.getElementById("all").classList.toggle("hidden",t!=="all");document.getElementById("tabDash").classList.toggle("active",t==="dashboard");document.getElementById("tabAll").classList.toggle("active",t==="all");if(t==="all")renderAll()}
+function openAdd(){document.getElementById("date").value=key(new Date());document.getElementById("amount").value="";document.getElementById("subcategory").value="";document.getElementById("note").value="";document.getElementById("sheet").classList.add("open")}
+function closeAdd(){document.getElementById("sheet").classList.remove("open")}
+function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
+function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderAll();render()}
+document.getElementById("category").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("payment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+render();
+</script>
+</body></html>
