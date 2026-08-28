@@ -37,10 +37,31 @@ input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;borde
 
 <section id="dashboard">
 <div class="month"><button onclick="changeMonth(-1)">‹</button><b id="monthLabel"></b><button onclick="changeMonth(1)">›</button></div>
-<div class="card"><div class="total-label">Total spending</div><div class="total" id="total">€0.00</div><div class="grid" style="margin-top:14px"><div class="stat"><span class="muted">Transactions</span><b id="count">0</b></div><div class="stat"><span class="muted">Daily average</span><b id="avg">€0.00</b></div></div></div>
-<div class="card"><h2>By category</h2><div id="categories"></div></div>
-<div class="card"><h2>Recent</h2><div id="recent"></div></div>
+
+<div class="card"><div class="total-label">Monthly overview</div>
+<div class="grid" style="margin-top:12px">
+<div class="stat"><span class="muted">Sales</span><b id="ovSales">€0.00</b></div>
+<div class="stat"><span class="muted">All expenses</span><b id="ovExpenses">€0.00</b></div>
+<div class="stat"><span class="muted">Cash expenses</span><b id="ovCash">€0.00</b></div>
+<div class="stat"><span class="muted">Bank expenses</span><b id="ovBank">€0.00</b></div>
+</div></div>
+
+<div class="card"><h2>Sales performance</h2>
+<div class="grid">
+<div class="stat"><span class="muted">Average daily sales</span><b id="ovAvgSales">€0.00</b></div>
+<div class="stat"><span class="muted">Sales days</span><b id="ovSalesDays">0</b></div>
+<div class="stat"><span class="muted">Best sales day</span><b id="ovBestSales">€0.00</b></div>
+<div class="stat"><span class="muted">Sales vs expenses</span><b id="ovMargin">€0.00</b></div>
+</div></div>
+
+<div class="card"><h2>Cash flow</h2>
+<div id="ovInsights" class="muted" style="line-height:1.6"></div>
+</div>
+
+<div class="card"><h2>Expense breakdown</h2><div id="categories"></div></div>
+<div class="card"><h2>Recent expenses</h2><div id="recent"></div></div>
 </section>
+
 
 <section id="sales" class="hidden">
 <div class="month"><button onclick="changeMonth(-1)">‹</button><b id="salesMonthLabel"></b><button onclick="changeMonth(1)">›</button></div>
@@ -49,7 +70,7 @@ input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;borde
 <div class="stat"><span class="muted">Cash sales</span><b id="cashSales">€0.00</b></div>
 <div class="stat"><span class="muted">Bank sales</span><b id="bankSales">€0.00</b></div>
 </div></div>
-<div class="card"><h2>Sales for the day</h2><div class="grid">
+<div class="card"><h2>Sales for the day</h2><label>Date</label><input type="date" id="salesDate"><div class="grid">
 <div><label>Cash sales (€)</label><input type="number" step="0.01" inputmode="decimal" id="cashInput" placeholder="0.00"></div>
 <div><label>Bank sales (€)</label><input type="number" step="0.01" inputmode="decimal" id="bankInput" placeholder="0.00"></div>
 </div><button class="primary" onclick="saveDailySales()">Save Daily Sales</button></div>
@@ -89,18 +110,40 @@ function monthItems(){return expenses.filter(e=>{let d=new Date(e.date);return d
 function render(){
  document.getElementById("monthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
  let items=monthItems(), total=items.reduce((s,e)=>s+e.amount,0);
- document.getElementById("total").textContent=euro(total);document.getElementById("count").textContent=items.length;
- document.getElementById("avg").textContent=euro(total/(new Date(month.getFullYear(),month.getMonth()+1,0).getDate()));
+ let cashExp=items.filter(e=>e.payment==="Cash").reduce((s,e)=>s+e.amount,0);
+ let bankExp=total-cashExp;
+ let ms=salesForMonth();
+ let cashSales=ms.reduce((s,e)=>s+e.cash,0), bankSales=ms.reduce((s,e)=>s+e.bank,0), totalSales=cashSales+bankSales;
+ let salesDays=ms.filter(e=>e.cash+e.bank>0).length;
+ let avgSales=salesDays?totalSales/salesDays:0;
+ let bestSales=ms.reduce((m,e)=>Math.max(m,e.cash+e.bank),0);
+ document.getElementById("ovSales").textContent=euro(totalSales);
+ document.getElementById("ovExpenses").textContent=euro(total);
+ document.getElementById("ovCash").textContent=euro(cashExp);
+ document.getElementById("ovBank").textContent=euro(bankExp);
+ document.getElementById("ovAvgSales").textContent=euro(avgSales);
+ document.getElementById("ovSalesDays").textContent=salesDays;
+ document.getElementById("ovBestSales").textContent=euro(bestSales);
+ document.getElementById("ovMargin").textContent=euro(totalSales-total);
+
+ let insight=[];
+ if(totalSales===0 && total===0) insight.push("No sales or expenses have been recorded this month.");
+ else {
+   insight.push(`${salesDays} day${salesDays===1?"":"s"} with sales, averaging ${euro(avgSales)} per sales day.`);
+   insight.push(`Cash represents ${totalSales?Math.round(cashSales/totalSales*100):0}% of sales; bank represents ${totalSales?Math.round(bankSales/totalSales*100):0}%.`);
+   insight.push(`Expenses are ${total?Math.round(total/Math.max(totalSales,1)*100):0}% of sales.`);
+   if(totalSales>total) insight.push(`Current operating surplus before other adjustments: ${euro(totalSales-total)}.`);
+   else if(totalSales<total) insight.push(`Expenses exceed sales by ${euro(total-totalSales)}.`);
+   else insight.push("Sales and expenses are currently equal.");
+ }
+ document.getElementById("ovInsights").innerHTML=insight.map(x=>`<div>• ${x}</div>`).join("");
+
  let map={};items.forEach(e=>map[e.category]=(map[e.category]||0)+e.amount);
  let cats=Object.entries(map).sort((a,b)=>b[1]-a[1]), max=cats[0]?.[1]||1;
  document.getElementById("categories").innerHTML=cats.length?cats.map(([c,v])=>`<div class="row"><div class="icon">${icons[c]||"•"}</div><div class="grow"><b>${c}</b><div class="bar"><i style="width:${v/max*100}%"></i></div></div><div class="amount">${euro(v)}</div></div>`).join(""):'<div class="empty">No expenses this month.</div>';
  let recent=[...items].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
- document.getElementById("recent").innerHTML=recent.length?recent.map(row).join(""):'<div class="empty">Add your first expense.</div>';
+ document.getElementById("recent").innerHTML=recent.length?recent.map(row).join(""):'<div class="empty">No expenses recorded.</div>';
 }
-function row(e){return `<div class="row"><div class="icon">${icons[e.category]||"•"}</div><div class="grow"><b>${e.category}</b><div class="sub">${new Date(e.date).toLocaleDateString("de-DE")}${e.subcategory?" • "+esc(e.subcategory):""}${e.note?" • "+esc(e.note):""}</div></div><div class="amount">${euro(e.amount)}</div></div>`}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function renderAll(){let q=document.getElementById("search").value.toLowerCase(), list=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).filter(e=>JSON.stringify(e).toLowerCase().includes(q));document.getElementById("allList").innerHTML=list.length?list.map(e=>row(e)+`<div style="text-align:right"><button class="danger" onclick="removeExpense('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No matching expenses.</div>'}
-
 function salesForMonth(){return sales.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
 function renderSales(){
  document.getElementById("salesMonthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
@@ -112,7 +155,7 @@ function renderSales(){
  document.getElementById("salesList").innerHTML=sorted.length?sorted.map(e=>`<div class="row"><div class="icon">💰</div><div class="grow"><b>${new Date(e.date).toLocaleDateString("de-DE")}</b><div class="sub">Cash ${euro(e.cash)} • Bank ${euro(e.bank)}</div></div><div class="amount">${euro(e.cash+e.bank)}</div><button class="danger" onclick="removeSale('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No sales recorded this month.</div>';
 }
 function saveDailySales(){
- let date=key(new Date()), cash=parseFloat(document.getElementById("cashInput").value)||0, bank=parseFloat(document.getElementById("bankInput").value)||0;
+ let date=document.getElementById("salesDate").value||key(new Date()), cash=parseFloat(document.getElementById("cashInput").value)||0, bank=parseFloat(document.getElementById("bankInput").value)||0;
  if(cash<0||bank<0||cash+bank<=0){alert("Enter a cash sale, bank sale, or both.");return}
  let existing=sales.find(e=>e.date===date);
  if(existing){existing.cash=cash;existing.bank=bank}else{sales.push({id:crypto.randomUUID(),date,cash,bank})}
@@ -135,6 +178,7 @@ function openAdd(){document.getElementById("date").value=key(new Date());documen
 function closeAdd(){document.getElementById("sheet").classList.remove("open")}
 function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
 function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderAll();render()}
+document.getElementById("salesDate").value=key(new Date());
 document.getElementById("category").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
 document.getElementById("payment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
