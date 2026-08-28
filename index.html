@@ -78,12 +78,18 @@ input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;borde
 </section>
 
 <section id="all" class="hidden">
-<div class="card"><input class="search" id="search" placeholder="Search expenses…" oninput="renderAll()"><div id="allList"></div></div>
+<div class="card"><h2>Expenses</h2><input class="search" id="search" placeholder="Search category, subcategory, payment, note…" oninput="renderAll()">
+<div class="grid"><div><label>From</label><input type="date" id="fromDate" onchange="renderAll()"></div><div><label>To</label><input type="date" id="toDate" onchange="renderAll()"></div></div>
+<div style="margin-top:10px"><select id="filterCategory" onchange="renderAll()"><option value="">All categories</option></select></div><div id="allList"></div></div>
 </section>
 </div>
 
 <nav><button id="tabDash" class="active" onclick="showTab('dashboard')">⌂<br>Overview</button><button id="tabAll" onclick="showTab('all')">☷<br>Expenses</button><button id="tabSales" onclick="showTab('sales')">▣<br>Sales</button><button onclick="openAdd()">＋<br>Add</button></nav>
 
+<div class="sheet" id="editSheet"><div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Edit Expense</h2><button class="danger" onclick="closeEdit()">Cancel</button></div>
+<input type="hidden" id="editId"><label>Date</label><input type="date" id="editDate"><label>Amount (€)</label><input type="number" step="0.01" inputmode="decimal" id="editAmount">
+<label>Category</label><select id="editCategory"></select><label>Subcategory</label><input id="editSubcategory"><label>Payment method</label><select id="editPayment"></select><label>Note</label><textarea id="editNote" rows="3"></textarea>
+<button class="primary" onclick="updateExpense()">Save Changes</button></div></div>
 <div class="sheet" id="sheet"><div class="modal">
 <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Add Expense</h2><button class="danger" onclick="closeAdd()">Cancel</button></div>
 <label>Date</label><input type="date" id="date">
@@ -152,7 +158,7 @@ function renderSales(){
  document.getElementById("bankSales").textContent=euro(bank);
  document.getElementById("salesTotal").textContent=euro(cash+bank);
  let sorted=[...items].sort((a,b)=>b.date.localeCompare(a.date));
- document.getElementById("salesList").innerHTML=sorted.length?sorted.map(e=>`<div class="row"><div class="icon">💰</div><div class="grow"><b>${new Date(e.date).toLocaleDateString("de-DE")}</b><div class="sub">Cash ${euro(e.cash)} • Bank ${euro(e.bank)}</div></div><div class="amount">${euro(e.cash+e.bank)}</div><button class="danger" onclick="removeSale('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No sales recorded this month.</div>';
+ document.getElementById("salesList").innerHTML=sorted.length?sorted.map(e=>`<div class="row"><div class="icon">💰</div><div class="grow"><b>${new Date(e.date).toLocaleDateString("de-DE")}</b><div class="sub">Cash ${euro(e.cash)} • Bank ${euro(e.bank)}</div></div><div class="amount">${euro(e.cash+e.bank)}</div><button class="danger" onclick="editSale('${e.id}')">Edit</button><button class="danger" onclick="removeSale('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No sales recorded this month.</div>';
 }
 function saveDailySales(){
  let date=document.getElementById("salesDate").value||key(new Date()), cash=parseFloat(document.getElementById("cashInput").value)||0, bank=parseFloat(document.getElementById("bankInput").value)||0;
@@ -177,8 +183,15 @@ function showTab(t){
 function openAdd(){document.getElementById("date").value=key(new Date());document.getElementById("amount").value="";document.getElementById("subcategory").value="";document.getElementById("note").value="";document.getElementById("sheet").classList.add("open")}
 function closeAdd(){document.getElementById("sheet").classList.remove("open")}
 function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
+function editExpense(id){let e=expenses.find(x=>x.id===id);if(!e)return;editId.value=e.id;editDate.value=e.date;editAmount.value=e.amount;editCategory.value=e.category;editSubcategory.value=e.subcategory||"";editPayment.value=e.payment||"Debit Card";editNote.value=e.note||"";editSheet.classList.add("open")}
+function closeEdit(){editSheet.classList.remove("open")}
+function updateExpense(){let e=expenses.find(x=>x.id===editId.value),v=parseFloat(editAmount.value);if(!e||!v||v<=0){alert("Enter a valid amount.");return}e.date=editDate.value;e.amount=v;e.category=editCategory.value;e.subcategory=editSubcategory.value;e.payment=editPayment.value;e.note=editNote.value;save();closeEdit();render();renderAll()}
+function editSale(id){let e=sales.find(x=>x.id===id);if(!e)return;let date=prompt("Sales date (YYYY-MM-DD):",e.date);if(date===null)return;let cash=parseFloat(prompt("Cash sales (€):",e.cash)),bank=parseFloat(prompt("Bank sales (€):",e.bank));if(!date||isNaN(cash)||isNaN(bank)||cash<0||bank<0||cash+bank<=0){alert("Enter valid sales values.");return}e.date=date;e.cash=cash;e.bank=bank;localStorage.setItem("sales",JSON.stringify(sales));renderSales();render()}
 function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderAll();render()}
 document.getElementById("salesDate").value=key(new Date());
+document.getElementById("filterCategory").innerHTML='<option value="">All categories</option>'+categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("editCategory").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("editPayment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
 document.getElementById("category").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
 document.getElementById("payment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
