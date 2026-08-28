@@ -18,7 +18,7 @@ h1{font-size:34px;margin:0;font-weight:750}.muted{color:#6e6e73}.month{display:f
 .card{background:white;border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px #0000000d}
 .total-label{color:#6e6e73}.total{font-size:34px;font-weight:750;margin-top:4px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#f2f2f7;border-radius:16px;padding:14px}.stat b{display:block;font-size:20px;margin-top:4px}
-h2{font-size:20px;margin:2px 0 14px}.row{display:flex;align-items:center;gap:12px;padding:10px 0}.icon{width:40px;height:40px;border-radius:50%;background:#e8f2ff;display:grid;place-items:center;font-size:20px}.grow{flex:1}.amount{font-weight:700;white-space:nowrap}.row button.danger{font-size:13px;padding:6px 4px;white-space:nowrap}.sub{font-size:13px;color:#6e6e73;margin-top:2px}
+h2{font-size:20px;margin:2px 0 14px}.row{display:flex;align-items:center;gap:12px;padding:10px 0}.icon{width:40px;height:40px;border-radius:50%;background:#e8f2ff;display:grid;place-items:center;font-size:20px}.grow{flex:1}.amount{font-weight:700}.sub{font-size:13px;color:#6e6e73;margin-top:2px}
 .bar{height:9px;background:#e5e5ea;border-radius:99px;overflow:hidden;margin-top:7px}.bar>i{display:block;height:100%;background:#0a84ff;border-radius:99px}
 nav{position:fixed;bottom:0;left:0;right:0;background:#fffffff2;backdrop-filter:blur(18px);border-top:1px solid #ddd;display:flex;justify-content:center;padding:10px 10px calc(10px + env(safe-area-inset-bottom));z-index:5}
 nav button{flex:1;max-width:180px;border:0;background:none;color:#6e6e73;font-weight:600;padding:7px}nav button.active{color:#0a84ff}
@@ -77,26 +77,18 @@ input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;borde
 <div class="card"><h2>Daily sales</h2><div id="salesList"></div></div>
 </section>
 
-<section id="all" class="hidden">
-<div class="card">
-<h2>Expenses</h2>
-<input class="search" id="search" placeholder="Search category, subcategory, payment, note…" oninput="renderAll()">
-<div class="grid" style="margin-top:10px">
-<div><label>From</label><input type="date" id="fromDate" onchange="renderAll()"></div>
-<div><label>To</label><input type="date" id="toDate" onchange="renderAll()"></div>
-</div>
+<section id="all" class="hidden"><div class="card"><h2>Expenses</h2>
+<input class="search" id="search" placeholder="Search expenses…" oninput="renderAll()">
+<div class="grid" style="margin-top:10px"><div><label>From</label><input type="date" id="fromDate" onchange="renderAll()"></div><div><label>To</label><input type="date" id="toDate" onchange="renderAll()"></div></div>
 <div style="margin-top:10px"><select id="filterCategory" onchange="renderAll()"><option value="">All categories</option></select></div>
-<div id="allList"></div>
-</div>
-</section>
+<div id="allList"></div></div></section>
 </div>
 
 <nav><button id="tabDash" class="active" onclick="showTab('dashboard')">⌂<br>Overview</button><button id="tabAll" onclick="showTab('all')">☷<br>Expenses</button><button id="tabSales" onclick="showTab('sales')">▣<br>Sales</button><button onclick="openAdd()">＋<br>Add</button></nav>
 
 <div class="sheet" id="editSheet"><div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Edit Expense</h2><button class="danger" onclick="closeEdit()">Cancel</button></div>
 <input type="hidden" id="editId"><label>Date</label><input type="date" id="editDate"><label>Amount (€)</label><input type="number" step="0.01" inputmode="decimal" id="editAmount">
-<label>Category</label><select id="editCategory"></select><label>Subcategory</label><input id="editSubcategory"><label>Payment method</label><select id="editPayment"></select><label>Note</label><textarea id="editNote" rows="3"></textarea>
-<button class="primary" onclick="updateExpense()">Save Changes</button></div></div>
+<label>Category</label><select id="editCategory"></select><label>Subcategory</label><input id="editSubcategory"><label>Payment method</label><select id="editPayment"></select><label>Note</label><textarea id="editNote" rows="3"></textarea><button class="primary" onclick="updateExpense()">Save Changes</button></div></div>
 <div class="sheet" id="sheet"><div class="modal">
 <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Add Expense</h2><button class="danger" onclick="closeAdd()">Cancel</button></div>
 <label>Date</label><input type="date" id="date">
@@ -118,6 +110,101 @@ let month=new Date(); month.setDate(1);
 
 const euro=n=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
 const key=d=>new Date(d).toISOString().slice(0,10);
+function save(){localStorage.setItem("expenses",JSON.stringify(expenses))}
+function monthItems(){return expenses.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
+function render(){
+ document.getElementById("monthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+ let items=monthItems(), total=items.reduce((s,e)=>s+e.amount,0);
+ let cashExp=items.filter(e=>e.payment==="Cash").reduce((s,e)=>s+e.amount,0);
+ let bankExp=total-cashExp;
+ let ms=salesForMonth();
+ let cashSales=ms.reduce((s,e)=>s+e.cash,0), bankSales=ms.reduce((s,e)=>s+e.bank,0), totalSales=cashSales+bankSales;
+ let salesDays=ms.filter(e=>e.cash+e.bank>0).length;
+ let avgSales=salesDays?totalSales/salesDays:0;
+ let bestSales=ms.reduce((m,e)=>Math.max(m,e.cash+e.bank),0);
+ document.getElementById("ovSales").textContent=euro(totalSales);
+ document.getElementById("ovExpenses").textContent=euro(total);
+ document.getElementById("ovCash").textContent=euro(cashExp);
+ document.getElementById("ovBank").textContent=euro(bankExp);
+ document.getElementById("ovAvgSales").textContent=euro(avgSales);
+ document.getElementById("ovSalesDays").textContent=salesDays;
+ document.getElementById("ovBestSales").textContent=euro(bestSales);
+ document.getElementById("ovMargin").textContent=euro(totalSales-total);
+
+ let insight=[];
+ if(totalSales===0 && total===0) insight.push("No sales or expenses have been recorded this month.");
+ else {
+   insight.push(`${salesDays} day${salesDays===1?"":"s"} with sales, averaging ${euro(avgSales)} per sales day.`);
+   insight.push(`Cash represents ${totalSales?Math.round(cashSales/totalSales*100):0}% of sales; bank represents ${totalSales?Math.round(bankSales/totalSales*100):0}%.`);
+   insight.push(`Expenses are ${total?Math.round(total/Math.max(totalSales,1)*100):0}% of sales.`);
+   if(totalSales>total) insight.push(`Current operating surplus before other adjustments: ${euro(totalSales-total)}.`);
+   else if(totalSales<total) insight.push(`Expenses exceed sales by ${euro(total-totalSales)}.`);
+   else insight.push("Sales and expenses are currently equal.");
+ }
+ document.getElementById("ovInsights").innerHTML=insight.map(x=>`<div>• ${x}</div>`).join("");
+
+ let map={};items.forEach(e=>map[e.category]=(map[e.category]||0)+e.amount);
+ let cats=Object.entries(map).sort((a,b)=>b[1]-a[1]), max=cats[0]?.[1]||1;
+ document.getElementById("categories").innerHTML=cats.length?cats.map(([c,v])=>`<div class="row"><div class="icon">${icons[c]||"•"}</div><div class="grow"><b>${c}</b><div class="bar"><i style="width:${v/max*100}%"></i></div></div><div class="amount">${euro(v)}</div></div>`).join(""):'<div class="empty">No expenses this month.</div>';
+ let recent=[...items].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+ document.getElementById("recent").innerHTML=recent.length?recent.map(row).join(""):'<div class="empty">No expenses recorded.</div>';
+}
+function salesForMonth(){return sales.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
+function renderSales(){
+ document.getElementById("salesMonthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+ let items=salesForMonth(), cash=items.reduce((a,e)=>a+e.cash,0), bank=items.reduce((a,e)=>a+e.bank,0);
+ document.getElementById("cashSales").textContent=euro(cash);
+ document.getElementById("bankSales").textContent=euro(bank);
+ document.getElementById("salesTotal").textContent=euro(cash+bank);
+ let sorted=[...items].sort((a,b)=>b.date.localeCompare(a.date));
+ document.getElementById("salesList").innerHTML=sorted.length?sorted.map(e=>`<div class="row"><div class="icon">💰</div><div class="grow"><b>${new Date(e.date).toLocaleDateString("de-DE")}</b><div class="sub">Cash ${euro(e.cash)} • Bank ${euro(e.bank)}</div></div><div class="amount">${euro(e.cash+e.bank)}</div><button class="danger" onclick="editSale('${e.id}')">Edit</button><button class="danger" onclick="removeSale('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No sales recorded this month.</div>';
+}
+function renderAll(){
+ const el=document.getElementById("allList");if(!el)return;
+ const q=(document.getElementById("search")?.value||"").toLowerCase().trim(),from=document.getElementById("fromDate")?.value||"",to=document.getElementById("toDate")?.value||"",cat=document.getElementById("filterCategory")?.value||"";
+ const list=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).filter(e=>{if(from&&e.date<from)return false;if(to&&e.date>to)return false;if(cat&&e.category!==cat)return false;return !q||[e.date,e.category,e.subcategory,e.payment,e.note,e.amount].join(" ").toLowerCase().includes(q)});
+ const groups={};list.forEach(e=>(groups[e.date]??=[]).push(e));let html="";
+ Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(d=>{const t=groups[d].reduce((x,e)=>x+Number(e.amount||0),0);html+=`<div style="margin-top:18px;border-bottom:1px solid #ddd;padding-bottom:6px"><b>${new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b><span class="muted" style="float:right">${euro(t)}</span></div>`+groups[d].map(e=>row(e,true)).join("")});
+ el.innerHTML=html||'<div class="empty">No matching expenses.</div>';
+}
+function saveDailySales(){
+ let date=document.getElementById("salesDate").value||key(new Date()), cash=parseFloat(document.getElementById("cashInput").value)||0, bank=parseFloat(document.getElementById("bankInput").value)||0;
+ if(cash<0||bank<0||cash+bank<=0){alert("Enter a cash sale, bank sale, or both.");return}
+ let existing=sales.find(e=>e.date===date);
+ if(existing){existing.cash=cash;existing.bank=bank}else{sales.push({id:crypto.randomUUID(),date,cash,bank})}
+ localStorage.setItem("sales",JSON.stringify(sales));
+ document.getElementById("cashInput").value="";document.getElementById("bankInput").value="";
+ renderSales();
+}
+function removeSale(id){sales=sales.filter(e=>e.id!==id);localStorage.setItem("sales",JSON.stringify(sales));renderSales()}
+function changeMonth(n){month.setMonth(month.getMonth()+n);render();renderSales()}
+function showTab(t){
+ document.getElementById("dashboard").classList.toggle("hidden",t!=="dashboard");
+ document.getElementById("all").classList.toggle("hidden",t!=="all");
+ document.getElementById("sales").classList.toggle("hidden",t!=="sales");
+ document.getElementById("tabDash").classList.toggle("active",t==="dashboard");
+ document.getElementById("tabAll").classList.toggle("active",t==="all");
+ document.getElementById("tabSales").classList.toggle("active",t==="sales");
+ if(t==="all")renderAll(); if(t==="sales")renderSales();
+}
+function openAdd(){document.getElementById("date").value=key(new Date());document.getElementById("amount").value="";document.getElementById("subcategory").value="";document.getElementById("note").value="";document.getElementById("sheet").classList.add("open")}
+function closeAdd(){document.getElementById("sheet").classList.remove("open")}
+function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
+function editExpense(id){const e=expenses.find(x=>x.id===id);if(!e)return;editId.value=e.id;editDate.value=e.date;editAmount.value=e.amount;editCategory.value=e.category;editSubcategory.value=e.subcategory||"";editPayment.value=e.payment||"Debit Card";editNote.value=e.note||"";editSheet.classList.add("open")}
+function closeEdit(){editSheet.classList.remove("open")}
+function updateExpense(){const e=expenses.find(x=>x.id===editId.value),v=parseFloat(editAmount.value);if(!e||!v||v<=0){alert("Enter a valid amount.");return}e.date=editDate.value;e.amount=v;e.category=editCategory.value;e.subcategory=editSubcategory.value;e.payment=editPayment.value;e.note=editNote.value;save();closeEdit();render();renderAll()}
+function editSale(id){const e=sales.find(x=>x.id===id);if(!e)return;const date=prompt("Sales date (YYYY-MM-DD):",e.date);if(date===null)return;const cash=parseFloat(prompt("Cash sales (€):",e.cash));const bank=parseFloat(prompt("Bank sales (€):",e.bank));if(!date||isNaN(cash)||isNaN(bank)||cash<0||bank<0||cash+bank<=0){alert("Enter valid sales values.");return}e.date=date;e.cash=cash;e.bank=bank;localStorage.setItem("sales",JSON.stringify(sales));renderSales();render()}
+function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderAll();render()}
+document.getElementById("salesDate").value=key(new Date());
+document.getElementById("filterCategory").innerHTML='<option value="">All categories</option>'+categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("editCategory").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("editPayment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("category").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
+document.getElementById("payment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+render();renderSales();renderAll();
+</script>
+</body></htmlfunction row(e,actions=false){return `<div class="row"><div class="icon">${icons[e.category]||"•"}</div><div class="grow"><b>${e.category}</b><div class="sub">${new Date(e.date).toLocaleDateString("de-DE")}${e.subcategory?" • "+esc(e.subcategory):""}${e.note?" • "+esc(e.note):""} • ${esc(e.payment||"")}</div></div><div class="amount">${euro(e.amount)}</div>${actions?`<button class="danger" onclick="editExpense('${e.id}')">Edit</button><button class="danger" onclick="removeExpense('${e.id}')">Delete</button>`:""}</div>`}
 function save(){localStorage.setItem("expenses",JSON.stringify(expenses))}
 function monthItems(){return expenses.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
 function render(){
@@ -190,10 +277,6 @@ function showTab(t){
 function openAdd(){document.getElementById("date").value=key(new Date());document.getElementById("amount").value="";document.getElementById("subcategory").value="";document.getElementById("note").value="";document.getElementById("sheet").classList.add("open")}
 function closeAdd(){document.getElementById("sheet").classList.remove("open")}
 function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
-function editExpense(id){let e=expenses.find(x=>x.id===id);if(!e)return;editId.value=e.id;editDate.value=e.date;editAmount.value=e.amount;editCategory.value=e.category;editSubcategory.value=e.subcategory||"";editPayment.value=e.payment||"Debit Card";editNote.value=e.note||"";editSheet.classList.add("open")}
-function closeEdit(){editSheet.classList.remove("open")}
-function updateExpense(){let e=expenses.find(x=>x.id===editId.value),v=parseFloat(editAmount.value);if(!e||!v||v<=0){alert("Enter a valid amount.");return}e.date=editDate.value;e.amount=v;e.category=editCategory.value;e.subcategory=editSubcategory.value;e.payment=editPayment.value;e.note=editNote.value;save();closeEdit();render();renderAll()}
-function editSale(id){let e=sales.find(x=>x.id===id);if(!e)return;let date=prompt("Sales date (YYYY-MM-DD):",e.date);if(date===null)return;let cash=parseFloat(prompt("Cash sales (€):",e.cash)),bank=parseFloat(prompt("Bank sales (€):",e.bank));if(!date||isNaN(cash)||isNaN(bank)||cash<0||bank<0||cash+bank<=0){alert("Enter valid sales values.");return}e.date=date;e.cash=cash;e.bank=bank;localStorage.setItem("sales",JSON.stringify(sales));renderSales();render()}
 function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderAll();render()}
 document.getElementById("salesDate").value=key(new Date());
 document.getElementById("filterCategory").innerHTML='<option value="">All categories</option>'+categories.map(x=>`<option>${x}</option>`).join("");
