@@ -42,12 +42,26 @@ input,select,textarea{width:100%;border:1px solid #d1d1d6;background:white;borde
 <div class="card"><h2>Recent</h2><div id="recent"></div></div>
 </section>
 
+<section id="sales" class="hidden">
+<div class="month"><button onclick="changeMonth(-1)">‹</button><b id="salesMonthLabel"></b><button onclick="changeMonth(1)">›</button></div>
+<div class="card"><div class="total-label">Total sales</div><div class="total" id="salesTotal">€0.00</div>
+<div class="grid" style="margin-top:14px">
+<div class="stat"><span class="muted">Cash sales</span><b id="cashSales">€0.00</b></div>
+<div class="stat"><span class="muted">Bank sales</span><b id="bankSales">€0.00</b></div>
+</div></div>
+<div class="card"><h2>Sales for the day</h2><div class="grid">
+<div><label>Cash sales (€)</label><input type="number" step="0.01" inputmode="decimal" id="cashInput" placeholder="0.00"></div>
+<div><label>Bank sales (€)</label><input type="number" step="0.01" inputmode="decimal" id="bankInput" placeholder="0.00"></div>
+</div><button class="primary" onclick="saveDailySales()">Save Daily Sales</button></div>
+<div class="card"><h2>Daily sales</h2><div id="salesList"></div></div>
+</section>
+
 <section id="all" class="hidden">
 <div class="card"><input class="search" id="search" placeholder="Search expenses…" oninput="renderAll()"><div id="allList"></div></div>
 </section>
 </div>
 
-<nav><button id="tabDash" class="active" onclick="showTab('dashboard')">⌂<br>Overview</button><button id="tabAll" onclick="showTab('all')">☷<br>Expenses</button><button onclick="openAdd()">＋<br>Add</button></nav>
+<nav><button id="tabDash" class="active" onclick="showTab('dashboard')">⌂<br>Overview</button><button id="tabAll" onclick="showTab('all')">☷<br>Expenses</button><button id="tabSales" onclick="showTab('sales')">▣<br>Sales</button><button onclick="openAdd()">＋<br>Add</button></nav>
 
 <div class="sheet" id="sheet"><div class="modal">
 <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:25px">Add Expense</h2><button class="danger" onclick="closeAdd()">Cancel</button></div>
@@ -65,6 +79,7 @@ const categories=["Housing","Groceries","Eating Out","Transport","Shopping","Uti
 const payments=["Debit Card","Credit Card","Bank Transfer","Cash","PayPal","Other"];
 const icons={Housing:"🏠",Groceries:"🛒","Eating Out":"🍽️",Transport:"🚗",Shopping:"🛍️",Utilities:"⚡",Insurance:"🛡️",Health:"❤️",Subscriptions:"🔁",Entertainment:"📺",Travel:"✈️",Family:"👨‍👩‍👧",Education:"📚",Personal:"👤",Other:"•"};
 let expenses=JSON.parse(localStorage.getItem("expenses")||"[]");
+let sales=JSON.parse(localStorage.getItem("sales")||"[]");
 let month=new Date(); month.setDate(1);
 
 const euro=n=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
@@ -85,8 +100,37 @@ function render(){
 function row(e){return `<div class="row"><div class="icon">${icons[e.category]||"•"}</div><div class="grow"><b>${e.category}</b><div class="sub">${new Date(e.date).toLocaleDateString("de-DE")}${e.subcategory?" • "+esc(e.subcategory):""}${e.note?" • "+esc(e.note):""}</div></div><div class="amount">${euro(e.amount)}</div></div>`}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function renderAll(){let q=document.getElementById("search").value.toLowerCase(), list=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).filter(e=>JSON.stringify(e).toLowerCase().includes(q));document.getElementById("allList").innerHTML=list.length?list.map(e=>row(e)+`<div style="text-align:right"><button class="danger" onclick="removeExpense('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No matching expenses.</div>'}
-function changeMonth(n){month.setMonth(month.getMonth()+n);render()}
-function showTab(t){document.getElementById("dashboard").classList.toggle("hidden",t!=="dashboard");document.getElementById("all").classList.toggle("hidden",t!=="all");document.getElementById("tabDash").classList.toggle("active",t==="dashboard");document.getElementById("tabAll").classList.toggle("active",t==="all");if(t==="all")renderAll()}
+
+function salesForMonth(){return sales.filter(e=>{let d=new Date(e.date);return d.getMonth()==month.getMonth()&&d.getFullYear()==month.getFullYear()})}
+function renderSales(){
+ document.getElementById("salesMonthLabel").textContent=month.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+ let items=salesForMonth(), cash=items.reduce((a,e)=>a+e.cash,0), bank=items.reduce((a,e)=>a+e.bank,0);
+ document.getElementById("cashSales").textContent=euro(cash);
+ document.getElementById("bankSales").textContent=euro(bank);
+ document.getElementById("salesTotal").textContent=euro(cash+bank);
+ let sorted=[...items].sort((a,b)=>b.date.localeCompare(a.date));
+ document.getElementById("salesList").innerHTML=sorted.length?sorted.map(e=>`<div class="row"><div class="icon">💰</div><div class="grow"><b>${new Date(e.date).toLocaleDateString("de-DE")}</b><div class="sub">Cash ${euro(e.cash)} • Bank ${euro(e.bank)}</div></div><div class="amount">${euro(e.cash+e.bank)}</div><button class="danger" onclick="removeSale('${e.id}')">Delete</button></div>`).join(""):'<div class="empty">No sales recorded this month.</div>';
+}
+function saveDailySales(){
+ let date=key(new Date()), cash=parseFloat(document.getElementById("cashInput").value)||0, bank=parseFloat(document.getElementById("bankInput").value)||0;
+ if(cash<0||bank<0||cash+bank<=0){alert("Enter a cash sale, bank sale, or both.");return}
+ let existing=sales.find(e=>e.date===date);
+ if(existing){existing.cash=cash;existing.bank=bank}else{sales.push({id:crypto.randomUUID(),date,cash,bank})}
+ localStorage.setItem("sales",JSON.stringify(sales));
+ document.getElementById("cashInput").value="";document.getElementById("bankInput").value="";
+ renderSales();
+}
+function removeSale(id){sales=sales.filter(e=>e.id!==id);localStorage.setItem("sales",JSON.stringify(sales));renderSales()}
+function changeMonth(n){month.setMonth(month.getMonth()+n);render();renderSales()}
+function showTab(t){
+ document.getElementById("dashboard").classList.toggle("hidden",t!=="dashboard");
+ document.getElementById("all").classList.toggle("hidden",t!=="all");
+ document.getElementById("sales").classList.toggle("hidden",t!=="sales");
+ document.getElementById("tabDash").classList.toggle("active",t==="dashboard");
+ document.getElementById("tabAll").classList.toggle("active",t==="all");
+ document.getElementById("tabSales").classList.toggle("active",t==="sales");
+ if(t==="all")renderAll(); if(t==="sales")renderSales();
+}
 function openAdd(){document.getElementById("date").value=key(new Date());document.getElementById("amount").value="";document.getElementById("subcategory").value="";document.getElementById("note").value="";document.getElementById("sheet").classList.add("open")}
 function closeAdd(){document.getElementById("sheet").classList.remove("open")}
 function saveExpense(){let amount=parseFloat(document.getElementById("amount").value);if(!amount||amount<=0){alert("Enter a valid amount.");return}expenses.push({id:crypto.randomUUID(),date:document.getElementById("date").value,amount,category:document.getElementById("category").value,subcategory:document.getElementById("subcategory").value,payment:document.getElementById("payment").value,note:document.getElementById("note").value});save();closeAdd();render();renderAll()}
@@ -94,6 +138,6 @@ function removeExpense(id){expenses=expenses.filter(e=>e.id!==id);save();renderA
 document.getElementById("category").innerHTML=categories.map(x=>`<option>${x}</option>`).join("");
 document.getElementById("payment").innerHTML=payments.map(x=>`<option>${x}</option>`).join("");
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
-render();
+render();renderSales();
 </script>
 </body></html>
